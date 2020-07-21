@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.idea.scripting.gradle.roots
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.openapi.externalSystem.autoimport.AsyncFileChangeListenerBase
 import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.util.BackgroundTaskUtil
@@ -13,6 +14,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.psi.PsiManager
 import com.intellij.ui.EditorNotifications
 import kotlinx.coroutines.GlobalScope
@@ -28,7 +31,6 @@ import org.jetbrains.kotlin.idea.scripting.gradle.importing.KotlinDslGradleBuild
 import org.jetbrains.kotlin.idea.scripting.gradle.roots.GradleBuildRoot.ImportingStatus.*
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstance
 import org.jetbrains.plugins.gradle.config.GradleSettingsListenerAdapter
 import org.jetbrains.plugins.gradle.service.GradleInstallationManager
 import org.jetbrains.plugins.gradle.settings.*
@@ -241,6 +243,34 @@ class GradleBuildRootsManager(val project: Project) : GradleBuildRootsLocator(),
             // don't call this.add, as we are inside scripting manager initialization
             roots.add(loadLinkedRoot(it))
         }
+
+        // subscribe to external file changes
+        VirtualFileManager.getInstance().addAsyncFileListener(
+            object : AsyncFileChangeListenerBase() {
+                val changedFiles = mutableListOf<String>()
+
+                override fun init() {
+                    changedFiles.clear()
+                }
+
+                override fun isRelevant(path: String): Boolean {
+                    return maybeAffectedGradleProjectFile(path)
+                }
+
+                override fun updateFile(file: VirtualFile, event: VFileEvent) {
+                    changedFiles.add(event.path)
+                }
+
+                override fun apply() {
+                    changedFiles.forEach {
+                        LocalFileSystem.getInstance().findFileByPath(it)?.let { f ->
+                            fileChanged(f.path, f.timeStamp)
+                        }
+                    }
+                }
+            },
+            project
+        )
 
         // subscribe to linked gradle project modification
         val listener = object : GradleSettingsListenerAdapter() {

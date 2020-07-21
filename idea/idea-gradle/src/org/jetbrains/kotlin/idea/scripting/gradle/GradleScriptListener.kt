@@ -18,11 +18,6 @@ class GradleScriptListener(project: Project) : ScriptChangeListener(project) {
     private val buildRootsManager
         get() = GradleBuildRootsManager.getInstance(project)
 
-    init {
-        // listen changes using VFS events, including gradle-configuration related files
-        addVfsListener(this, buildRootsManager)
-    }
-
     // cache buildRootsManager service for hot path under vfs changes listener
     val fileChangesProcessor: (filePath: String, ts: Long) -> Unit
         get() {
