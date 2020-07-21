@@ -6,11 +6,17 @@
 package org.jetbrains.kotlin.idea.scripting.gradle.roots
 
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.project.Project
+import org.jetbrains.kotlin.idea.scripting.gradle.settings.StandaloneScriptsStorage
 
-class GradleBuildRootIndex : StandaloneScriptsUpdater {
+class GradleBuildRootIndex(private val project: Project) : StandaloneScriptsUpdater {
     private val log = logger<GradleBuildRootIndex>()
 
-    private val standaloneScriptRoots = mutableMapOf<String, GradleBuildRoot?>()
+    private val standaloneScriptRoots = mutableMapOf<String, GradleBuildRoot?>().apply {
+        StandaloneScriptsStorage.getInstance(project).files.forEach {
+            this[it] = null
+        }
+    }
 
     private val byWorkingDir = HashMap<String, GradleBuildRoot>()
     private val byProjectDir = HashMap<String, GradleBuildRoot>()
@@ -70,12 +76,15 @@ class GradleBuildRootIndex : StandaloneScriptsUpdater {
 
     @Synchronized
     override fun addStandaloneScript(path: String) {
+        StandaloneScriptsStorage.getInstance(project).files.add(path)
         computeStandaloneScriptRoot(path)
     }
 
     @Synchronized
-    override fun removeStandaloneScript(path: String) =
-        standaloneScriptRoots.remove(path)
+    override fun removeStandaloneScript(path: String): GradleBuildRoot? {
+        StandaloneScriptsStorage.getInstance(project).files.remove(path)
+        return standaloneScriptRoots.remove(path)
+    }
 
     override var standaloneScripts: Collection<String>
         @Synchronized get() = standaloneScriptRoots.keys
