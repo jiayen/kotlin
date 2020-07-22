@@ -12,11 +12,33 @@ import org.jetbrains.kotlin.idea.scripting.gradle.settings.StandaloneScriptsStor
 class GradleBuildRootIndex(private val project: Project) : StandaloneScriptsUpdater {
     private val log = logger<GradleBuildRootIndex>()
 
-    private val standaloneScriptRoots = mutableMapOf<String, GradleBuildRoot?>().apply {
-        StandaloneScriptsStorage.getInstance(project).files.forEach {
-            this[it] = null
+    private inner class StandaloneScriptRootsCache {
+        private val standaloneScripts: MutableSet<String>
+            get() = StandaloneScriptsStorage.getInstance(project)?.files ?: hashSetOf()
+
+        private val standaloneScriptRoots = mutableMapOf<String, GradleBuildRoot?>().apply {
+            standaloneScripts.forEach(::updateRootsCache)
+        }
+
+        fun all(): List<String> = standaloneScripts.toList()
+        fun get(path: String): GradleBuildRoot? = standaloneScriptRoots[path]
+
+        fun add(path: String) {
+            standaloneScripts.add(path)
+            updateRootsCache(path)
+        }
+
+        fun remove(path: String): GradleBuildRoot? {
+            standaloneScripts.remove(path)
+            return standaloneScriptRoots.remove(path)
+        }
+
+        fun updateRootsCache(path: String) {
+            standaloneScriptRoots[path] = findNearestRoot(path)
         }
     }
+
+    private val standaloneScriptRoots by lazy { StandaloneScriptRootsCache() }
 
     private val byWorkingDir = HashMap<String, GradleBuildRoot>()
     private val byProjectDir = HashMap<String, GradleBuildRoot>()
@@ -33,7 +55,7 @@ class GradleBuildRootIndex(private val project: Project) : StandaloneScriptsUpda
             }
         }
 
-        standaloneScriptRoots.keys.forEach(::computeStandaloneScriptRoot)
+        standaloneScriptRoots.all().forEach(standaloneScriptRoots::updateRootsCache)
     }
 
     @Synchronized
@@ -54,10 +76,10 @@ class GradleBuildRootIndex(private val project: Project) : StandaloneScriptsUpda
     fun getBuildByProjectDir(projectDir: String) = byProjectDir[projectDir]
 
     @Synchronized
-    fun isStandaloneScript(path: String) = path in standaloneScriptRoots
+    fun isStandaloneScript(path: String) = path in standaloneScriptRoots.all()
 
     @Synchronized
-    fun getStandaloneScriptRoot(path: String) = standaloneScriptRoots[path]
+    fun getStandaloneScriptRoot(path: String) = standaloneScriptRoots.get(path)
 
     @Synchronized
     fun add(value: GradleBuildRoot): GradleBuildRoot? {
@@ -76,24 +98,14 @@ class GradleBuildRootIndex(private val project: Project) : StandaloneScriptsUpda
 
     @Synchronized
     override fun addStandaloneScript(path: String) {
-        StandaloneScriptsStorage.getInstance(project).files.add(path)
-        computeStandaloneScriptRoot(path)
+        standaloneScriptRoots.add(path)
     }
 
     @Synchronized
     override fun removeStandaloneScript(path: String): GradleBuildRoot? {
-        StandaloneScriptsStorage.getInstance(project).files.remove(path)
         return standaloneScriptRoots.remove(path)
     }
 
-    override var standaloneScripts: Collection<String>
-        @Synchronized get() = standaloneScriptRoots.keys
-        @Synchronized set(value) {
-            standaloneScriptRoots.clear()
-            value.forEach(::computeStandaloneScriptRoot)
-        }
-
-    private fun computeStandaloneScriptRoot(path: String) {
-        standaloneScriptRoots[path] = findNearestRoot(path)
-    }
+    override val standaloneScripts: Collection<String>
+        @Synchronized get() = standaloneScriptRoots.all()
 }

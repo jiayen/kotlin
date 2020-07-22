@@ -14,7 +14,7 @@ import com.intellij.util.xmlb.XmlSerializerUtil
     storages = [Storage(StoragePathMacros.CACHE_FILE)]
 )
 class StandaloneScriptsStorage : PersistentStateComponent<StandaloneScriptsStorage> {
-    var files: MutableSet<String> = hashSetOf("aaa.kt", "ddd.kt")
+    var files: MutableSet<String> = hashSetOf()
 
     fun getScripts(): List<String> = files.toList()
 
@@ -27,7 +27,7 @@ class StandaloneScriptsStorage : PersistentStateComponent<StandaloneScriptsStora
     }
 
     companion object {
-        fun getInstance(project: Project): StandaloneScriptsStorage =
+        fun getInstance(project: Project): StandaloneScriptsStorage? =
             ServiceManager.getService(project, StandaloneScriptsStorage::class.java)
     }
 }

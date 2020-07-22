@@ -49,8 +49,8 @@ class StandaloneScriptsUIComponent(private val project: Project) : UnnamedConfig
 
     private var panel: JPanel? = null
 
-    private val storage = StandaloneScriptsStorage.getInstance(project)
-    private val scriptsInTable = storage.getScripts().toMutableList()
+    private val scriptsFromStorage = StandaloneScriptsStorage.getInstance(project)?.files?.toList() ?: emptyList()
+    private val scriptsInTable = scriptsFromStorage.toMutableList()
 
     private val table: JBTable
     private val model: KotlinStandaloneScriptsModel
@@ -68,13 +68,13 @@ class StandaloneScriptsUIComponent(private val project: Project) : UnnamedConfig
 
     override fun reset() {
         scriptsInTable.clear()
-        scriptsInTable.addAll(storage.getScripts())
+        scriptsInTable.addAll(scriptsFromStorage)
         model.items = scriptsInTable
     }
 
     override fun apply() {
         GradleBuildRootsManager.getInstance(project).updateStandaloneScripts {
-            val previousScripts = storage.files
+            val previousScripts = scriptsFromStorage
 
             scriptsInTable
                 .filterNot { previousScripts.contains(it) }
@@ -104,17 +104,7 @@ class StandaloneScriptsUIComponent(private val project: Project) : UnnamedConfig
     }
 
     override fun isModified(): Boolean {
-        val paths = storage.getScripts()
-        if (paths.size != scriptsInTable.size) {
-            return true
-        }
-        for (i in paths.indices) {
-            val path = paths[i]
-            if (path != scriptsInTable[i]) {
-                return true
-            }
-        }
-        return false
+        return scriptsFromStorage != scriptsInTable
     }
 
     override fun disposeUIResources() {
